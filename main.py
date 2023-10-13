@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from typing import List
-from models import Hotel, RoomType, Room, Guest, Reservation
+from models import Hotel, RoomType, Room, Guest, Reservation,Payment
 
 
 app = FastAPI()
@@ -77,10 +77,11 @@ async def create_guest(guest: Guest):
 async def get_guests():
     return guests_db
 
-# Create a reservation
+# Create a reservation with payments
 @app.post("/reservations/", response_model=Reservation)
-async def create_reservation(reservation: Reservation):
+async def create_reservation(reservation: Reservation, payments: List[Payment]):
     new_reservation = reservation.dict()
+    new_reservation['payments'] = [payment.dict() for payment in payments]
     reservations_db.append(new_reservation)
     return new_reservation
 
@@ -91,13 +92,15 @@ async def get_reservations():
 
 # Update a reservation by reservation_id
 @app.put("/reservations/{reservation_id}", response_model=Reservation)
-async def update_reservation(reservation_id: int, reservation: Reservation):
+async def update_reservation(reservation_id: int, reservation: Reservation, payments: List[Payment]):
     if reservation_id < 0 or reservation_id >= len(reservations_db):
         raise HTTPException(status_code=404, detail="Reservation not found")
 
-    # Update the reservation in the database
-    reservations_db[reservation_id] = reservation.dict()
-    return reservations_db[reservation_id]
+    # Update the reservation in the database, including payments
+    updated_reservation = reservation.dict()
+    updated_reservation['payments'] = [payment.dict() for payment in payments]
+    reservations_db[reservation_id] = updated_reservation
+    return updated_reservation
 
 # Delete a reservation by reservation_id
 @app.delete("/reservations/{reservation_id}", response_model=Reservation)
@@ -108,6 +111,7 @@ async def delete_reservation(reservation_id: int):
     # Remove the reservation from the database
     deleted_reservation = reservations_db.pop(reservation_id)
     return deleted_reservation
-if __name__ == "__main__":
+
+if __name__ == "_main_":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
