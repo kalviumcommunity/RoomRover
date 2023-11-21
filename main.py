@@ -1,117 +1,71 @@
-from fastapi import FastAPI, HTTPException
+from abc import ABC, abstractmethod
 from typing import List
-from models import Hotel, RoomType, Room, Guest, Reservation,Payment
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
 
+class AbstractDatabase(ABC):
+
+    @abstractmethod
+    def create_item(self, item: BaseModel):
+        pass
+
+    @abstractmethod
+    def get_all_items(self) -> List[BaseModel]:
+        pass
+
+    @abstractmethod
+    def update_item(self, item_id: int, updated_item: BaseModel) -> BaseModel:
+        pass
+
+    @abstractmethod
+    def delete_item(self, item_id: int) -> BaseModel:
+        pass
+
+class InMemoryDatabase(AbstractDatabase):
+
+    def __init__(self):
+        self.hotels_db: List[BaseModel] = []
+
+    def create_item(self, item: BaseModel) -> BaseModel:
+        new_item = item.dict()
+        self.hotels_db.append(new_item)
+        return new_item
+
+    def get_all_items(self) -> List[BaseModel]:
+        return self.hotels_db
+
+    def update_item(self, item_id: int, updated_item: BaseModel) -> BaseModel:
+        if 0 <= item_id < len(self.hotels_db):
+            self.hotels_db[item_id] = updated_item.dict()
+            return self.hotels_db[item_id]
+        else:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+    def delete_item(self, item_id: int) -> BaseModel:
+        if 0 <= item_id < len(self.hotels_db):
+            return self.hotels_db.pop(item_id)
+        else:
+            raise HTTPException(status_code=404, detail="Item not found")
 
 app = FastAPI()
-
-hotels_db = []
-room_types_db = []
-rooms_db = []
-guests_db = []
-reservations_db = []
+db = InMemoryDatabase()
 
 # Create a hotel
-@app.post("/hotels/", response_model=Hotel)
-async def create_hotel(hotel: Hotel):
-    new_hotel = hotel.dict()
-    hotels_db.append(new_hotel)
-    return new_hotel
+@app.post("/hotels/", response_model=BaseModel)
+async def create_hotel(hotel: BaseModel):
+    return db.create_item(hotel)
 
 # Get all hotels
-@app.get("/hotels/", response_model=List[Hotel])
+@app.get("/hotels/", response_model=List[BaseModel])
 async def get_hotels():
-    return hotels_db
+    return db.get_all_items()
 
 # Update a hotel by hotel_id
-@app.put("/hotels/{hotel_id}", response_model=Hotel)
-async def update_hotel(hotel_id: int, hotel: Hotel):
-    if hotel_id < 0 or hotel_id >= len(hotels_db):
-        raise HTTPException(status_code=404, detail="Hotel not found")
-    
-    hotels_db[hotel_id] = hotel.dict()
-    return hotels_db[hotel_id]
+@app.put("/hotels/{hotel_id}", response_model=BaseModel)
+async def update_hotel(hotel_id: int, hotel: BaseModel):
+    return db.update_item(hotel_id, hotel)
 
 # Delete a hotel by hotel_id
-@app.delete("/hotels/{hotel_id}", response_model=Hotel)
+@app.delete("/hotels/{hotel_id}", response_model=BaseModel)
 async def delete_hotel(hotel_id: int):
-    if hotel_id < 0 or hotel_id >= len(hotels_db):
-        raise HTTPException(status_code=404, detail="Hotel not found")
-    
-    deleted_hotel = hotels_db.pop(hotel_id)
-    return deleted_hotel
-
-# Create a room type
-@app.post("/room_types/", response_model=RoomType)
-async def create_room_type(room_type: RoomType):
-    new_room_type = room_type.dict()
-    room_types_db.append(new_room_type)
-    return new_room_type
-
-# Get all room types
-@app.get("/room_types/", response_model=List[RoomType])
-async def get_room_types():
-    return room_types_db
-
-# Create a room
-@app.post("/rooms/", response_model=Room)
-async def create_room(room: Room):
-    new_room = room.dict()
-    rooms_db.append(new_room)
-    return new_room
-
-# Get all rooms
-@app.get("/rooms/", response_model=List[Room])
-async def get_rooms():
-    return rooms_db
-
-# Create a guest
-@app.post("/guests/", response_model=Guest)
-async def create_guest(guest: Guest):
-    new_guest = guest.dict()
-    guests_db.append(new_guest)
-    return new_guest
-
-# Get all guests
-@app.get("/guests/", response_model=List[Guest])
-async def get_guests():
-    return guests_db
-
-# Create a reservation with payments
-@app.post("/reservations/", response_model=Reservation)
-async def create_reservation(reservation: Reservation, payments: List[Payment]):
-    new_reservation = reservation.dict()
-    new_reservation['payments'] = [payment.dict() for payment in payments]
-    reservations_db.append(new_reservation)
-    return new_reservation
-
-# Get all reservations
-@app.get("/reservations/", response_model=List[Reservation])
-async def get_reservations():
-    return reservations_db
-
-# Update a reservation by reservation_id
-@app.put("/reservations/{reservation_id}", response_model=Reservation)
-async def update_reservation(reservation_id: int, reservation: Reservation, payments: List[Payment]):
-    if reservation_id < 0 or reservation_id >= len(reservations_db):
-        raise HTTPException(status_code=404, detail="Reservation not found")
-
-    # Update the reservation in the database, including payments
-    updated_reservation = reservation.dict()
-    updated_reservation['payments'] = [payment.dict() for payment in payments]
-    reservations_db[reservation_id] = updated_reservation
-    return updated_reservation
-
-# Delete a reservation by reservation_id
-@app.delete("/reservations/{reservation_id}", response_model=Reservation)
-async def delete_reservation(reservation_id: int):
-    if reservation_id < 0 or reservation_id >= len(reservations_db):
-        raise HTTPException(status_code=404, detail="Reservation not found")
-
-    # Remove the reservation from the database
-    deleted_reservation = reservations_db.pop(reservation_id)
-    return deleted_reservation
-
-if __name__ == "_main_":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    return db.delete_item(hotel_id)
